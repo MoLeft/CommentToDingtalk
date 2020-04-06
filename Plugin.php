@@ -82,7 +82,13 @@ class CommentToDingtalk_Plugin implements Typecho_Plugin_Interface
                 'singleURL' =>$post->permalink
             ]
         ];
-        $response = $this->request($this->getWebhook($webhook,$secret), json_encode($data));
+	 
+        //$response = $this->request($this->getWebhook($webhook,$secret), json_encode($data));
+	
+	//解决 静态方法 中调用 非静态方法 出现的错误
+	//我在 PHP 5.6、PHP 7.3 测试通过，可以确定 PHP 5.6 以上版本可正常使用，但是低版本无法使用
+	$response = (new self())->request((new self())->getWebhook($webhook,$secret), json_encode($data));
+	
         if($response['errcode'] !== 0){
             //发送失败，记录日志
             $log = @file_get_contents('./error.log');
