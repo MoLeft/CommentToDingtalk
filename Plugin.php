@@ -2,7 +2,6 @@
 if (!defined('__TYPECHO_ROOT_DIR__')) {
     exit;
 }
-
 /**
  * Typecho评论推送到钉钉插件
  *
@@ -70,11 +69,20 @@ class CommentToDingtalk_Plugin implements Typecho_Plugin_Interface
         }
         $webhook = $options->plugin('CommentToDingtalk')->webhook;
         $secret  = $options->plugin('CommentToDingtalk')->secret;
-		$text = "###您收到了一条新评论\n文章标题：{$post->title}\n评论作者：{$post->author}\n评论内容：{$post->text}";
+        list($msec, $sec) = explode(' ', microtime());
+        $timestamp        = (float) sprintf('%.0f', (floatval($msec) + floatval($sec)) * 1000);
+        $stringToSign = $timestamp."\n".$secret;
+        $sign             = urlencode(base64_encode(hash_hmac('sha256', $stringToSign, $secret, true)));
+        $webhook_url      = "{$webhook}&timestamp={$timestamp}&sign={$sign}";
+		$text = "![screenshot](https://cdn.jsdelivr.net/gh/Bhaoo/Cuckoo@1.0.1/assets/images/loading.gif)\n
+### {$options->title}\n
+文章标题：{$post->title}\n
+评论作者：{$post->author}\n
+评论内容：{$post->text}";
         $data = [
             'msgtype' => 'actionCard',
             'actionCard' => [
-                'title' => '您收到了一条新评论',
+                'title' => '您有一条新评论',
                 'text' => $text,
                 'btnOrientation' => 1,
                 'hideAvatar' => 0,
@@ -82,7 +90,7 @@ class CommentToDingtalk_Plugin implements Typecho_Plugin_Interface
                 'singleURL' =>$post->permalink
             ]
         ];
-        $response = $this->request($this->getWebhook($webhook,$secret), json_encode($data));
+        $response = self::request($webhook_url, json_encode($data));
         if($response['errcode'] !== 0){
             //发送失败，记录日志
             $log = @file_get_contents('./error.log');
@@ -91,7 +99,7 @@ class CommentToDingtalk_Plugin implements Typecho_Plugin_Interface
     }
 
     /* Curl请求精简版 */
-    protected function request($url, $postData)
+    private static function request($url, $postData)
     {
         $ch = curl_init();
         curl_setopt($ch, CURLOPT_URL, $url);
@@ -108,19 +116,4 @@ class CommentToDingtalk_Plugin implements Typecho_Plugin_Interface
         return json_decode($data, true);
     }
 
-    /* webhook地址 */
-    private function getWebhook($webhook, $secret)
-    {
-        list($msec, $sec) = explode(' ', microtime());
-        $timestamp        = (float) sprintf('%.0f', (floatval($msec) + floatval($sec)) * 1000);
-        $sign             = $this->signSecret($timestamp, $secret);
-        $webhook_url      = "{$webhook}&timestamp={$timestamp}&sign={$sign}";
-        return $webhook_url;
-    }
-
-    /* 计算签名 */
-    private function signSecret($timestamp,$secret){
-    	$stringToSign = $timestamp."\n".$secret;
-    	return urlencode(base64_encode(hash_hmac('sha256', $stringToSign, $secret, true)));
-    }
 }
